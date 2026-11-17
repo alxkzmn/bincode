@@ -1,10 +1,14 @@
 use std::io::Write;
 use std::mem::size_of;
 
-use super::Options;
+use super::{InternalOptions, Options};
 use de::read::BincodeRead;
 use error::{ErrorKind, Result};
 
+// Options has serialization methods that call these helpers. Requiring Options
+// here makes the helpers depend on their own callers, which Aeneas rejects as a
+// recursive declaration group before generating Lean. InternalOptions supplies
+// the configuration fields needed to encode the same bytes without that cycle.
 pub trait IntEncoding {
     /// Gets the size (in bytes) that a value would be serialized to.
     fn u16_size(n: u16) -> u64;
@@ -27,39 +31,39 @@ pub trait IntEncoding {
 
     /// Serializes a sequence length.
     #[inline(always)]
-    fn serialize_len<W: Write, O: Options>(
+    fn serialize_len<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         len: usize,
     ) -> Result<()> {
         Self::serialize_u64(ser, len as u64)
     }
 
-    fn serialize_u16<W: Write, O: Options>(
+    fn serialize_u16<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: u16,
     ) -> Result<()>;
 
-    fn serialize_u32<W: Write, O: Options>(
+    fn serialize_u32<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: u32,
     ) -> Result<()>;
 
-    fn serialize_u64<W: Write, O: Options>(
+    fn serialize_u64<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: u64,
     ) -> Result<()>;
 
-    fn serialize_i16<W: Write, O: Options>(
+    fn serialize_i16<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: i16,
     ) -> Result<()>;
 
-    fn serialize_i32<W: Write, O: Options>(
+    fn serialize_i32<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: i32,
     ) -> Result<()>;
 
-    fn serialize_i64<W: Write, O: Options>(
+    fn serialize_i64<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         val: i64,
     ) -> Result<()>;
@@ -99,14 +103,14 @@ pub trait IntEncoding {
     serde_if_integer128! {
         fn u128_size(v: u128) -> u64;
         fn i128_size(v: i128) -> u64;
-        fn serialize_u128<W: Write, O: Options>(
+        fn serialize_u128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: u128,
         ) -> Result<()>;
         fn deserialize_u128<'de, R: BincodeRead<'de>, O: Options>(
             de: &mut ::Deserializer<R, O>,
         ) -> Result<u128>;
-        fn serialize_i128<W: Write, O: Options>(
+        fn serialize_i128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: i128,
         ) -> Result<()>;
@@ -220,7 +224,7 @@ impl VarintEncoding {
         }
     }
 
-    fn serialize_varint<W: Write, O: Options>(
+    fn serialize_varint<W: Write, O: InternalOptions>(
         ser: &mut ::ser::Serializer<W, O>,
         n: u64,
     ) -> Result<()> {
@@ -290,7 +294,7 @@ impl VarintEncoding {
             }
         }
 
-        fn serialize_varint128<W: Write, O: Options>(
+        fn serialize_varint128<W: Write, O: InternalOptions>(
             ser: &mut ::ser::Serializer<W, O>,
             n: u128,
         ) -> Result<()> {
@@ -355,28 +359,28 @@ impl IntEncoding for FixintEncoding {
     }
 
     #[inline(always)]
-    fn serialize_u16<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u16) -> Result<()> {
+    fn serialize_u16<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u16) -> Result<()> {
         ser.serialize_literal_u16(val)
     }
     #[inline(always)]
-    fn serialize_u32<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u32) -> Result<()> {
+    fn serialize_u32<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u32) -> Result<()> {
         ser.serialize_literal_u32(val)
     }
     #[inline(always)]
-    fn serialize_u64<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u64) -> Result<()> {
+    fn serialize_u64<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u64) -> Result<()> {
         ser.serialize_literal_u64(val)
     }
 
     #[inline(always)]
-    fn serialize_i16<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i16) -> Result<()> {
+    fn serialize_i16<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i16) -> Result<()> {
         ser.serialize_literal_u16(val as u16)
     }
     #[inline(always)]
-    fn serialize_i32<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i32) -> Result<()> {
+    fn serialize_i32<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i32) -> Result<()> {
         ser.serialize_literal_u32(val as u32)
     }
     #[inline(always)]
-    fn serialize_i64<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i64) -> Result<()> {
+    fn serialize_i64<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i64) -> Result<()> {
         ser.serialize_literal_u64(val as u64)
     }
 
@@ -429,14 +433,14 @@ impl IntEncoding for FixintEncoding {
         }
 
         #[inline(always)]
-        fn serialize_u128<W: Write, O: Options>(
+        fn serialize_u128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: u128,
         ) -> Result<()> {
             ser.serialize_literal_u128(val)
         }
         #[inline(always)]
-        fn serialize_i128<W: Write, O: Options>(
+        fn serialize_i128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: i128,
         ) -> Result<()> {
@@ -485,28 +489,28 @@ impl IntEncoding for VarintEncoding {
     }
 
     #[inline(always)]
-    fn serialize_u16<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u16) -> Result<()> {
+    fn serialize_u16<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u16) -> Result<()> {
         Self::serialize_varint(ser, val as u64)
     }
     #[inline(always)]
-    fn serialize_u32<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u32) -> Result<()> {
+    fn serialize_u32<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u32) -> Result<()> {
         Self::serialize_varint(ser, val as u64)
     }
     #[inline(always)]
-    fn serialize_u64<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: u64) -> Result<()> {
+    fn serialize_u64<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: u64) -> Result<()> {
         Self::serialize_varint(ser, val)
     }
 
     #[inline(always)]
-    fn serialize_i16<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i16) -> Result<()> {
+    fn serialize_i16<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i16) -> Result<()> {
         Self::serialize_varint(ser, Self::zigzag_encode(val as i64))
     }
     #[inline(always)]
-    fn serialize_i32<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i32) -> Result<()> {
+    fn serialize_i32<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i32) -> Result<()> {
         Self::serialize_varint(ser, Self::zigzag_encode(val as i64))
     }
     #[inline(always)]
-    fn serialize_i64<W: Write, O: Options>(ser: &mut ::Serializer<W, O>, val: i64) -> Result<()> {
+    fn serialize_i64<W: Write, O: InternalOptions>(ser: &mut ::Serializer<W, O>, val: i64) -> Result<()> {
         Self::serialize_varint(ser, Self::zigzag_encode(val))
     }
 
@@ -562,14 +566,14 @@ impl IntEncoding for VarintEncoding {
             Self::varint128_size(Self::zigzag128_encode(n))
         }
         #[inline(always)]
-        fn serialize_u128<W: Write, O: Options>(
+        fn serialize_u128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: u128,
         ) -> Result<()> {
             Self::serialize_varint128(ser, val)
         }
         #[inline(always)]
-        fn serialize_i128<W: Write, O: Options>(
+        fn serialize_i128<W: Write, O: InternalOptions>(
             ser: &mut ::Serializer<W, O>,
             val: i128,
         ) -> Result<()> {

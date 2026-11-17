@@ -7,7 +7,7 @@ use byteorder::WriteBytesExt;
 
 use super::config::{IntEncoding, SizeLimit};
 use super::{Error, ErrorKind, Result};
-use config::{BincodeByteOrder, Options};
+use config::{BincodeByteOrder, InternalOptions};
 use std::mem::size_of;
 
 /// An Serializer that encodes values directly into a Writer.
@@ -17,7 +17,7 @@ use std::mem::size_of;
 ///
 /// This struct should not be used often.
 /// For most cases, prefer the `encode_into` function.
-pub struct Serializer<W, O: Options> {
+pub struct Serializer<W, O: InternalOptions> {
     writer: W,
     _options: O,
 }
@@ -32,7 +32,11 @@ macro_rules! impl_serialize_literal {
     };
 }
 
-impl<W: Write, O: Options> Serializer<W, O> {
+// Options has serialization methods that call this serializer. Requiring
+// Options here creates a recursive dependency that Aeneas rejects before
+// generating Lean. InternalOptions provides the same encoding configuration
+// without requiring those calling methods.
+impl<W: Write, O: InternalOptions> Serializer<W, O> {
     /// Creates a new Serializer with the given `Write`r.
     pub fn new(w: W, options: O) -> Serializer<W, O> {
         Serializer {
@@ -62,7 +66,7 @@ macro_rules! impl_serialize_int {
     };
 }
 
-impl<'a, W: Write, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
+impl<'a, W: Write, O: InternalOptions> serde::Serializer for &'a mut Serializer<W, O> {
     type Ok = ();
     type Error = Error;
     type SerializeSeq = Compound<'a, W, O>;
@@ -231,12 +235,12 @@ impl<'a, W: Write, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     }
 }
 
-pub(crate) struct SizeChecker<O: Options> {
+pub(crate) struct SizeChecker<O: InternalOptions> {
     pub options: O,
     pub total: u64,
 }
 
-impl<O: Options> SizeChecker<O> {
+impl<O: InternalOptions> SizeChecker<O> {
     fn add_raw(&mut self, size: u64) -> Result<()> {
         self.options.limit().add(size)?;
         self.total += size;
@@ -263,7 +267,7 @@ macro_rules! impl_size_int {
     };
 }
 
-impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
+impl<'a, O: InternalOptions> serde::Serializer for &'a mut SizeChecker<O> {
     type Ok = ();
     type Error = Error;
     type SerializeSeq = SizeCompound<'a, O>;
@@ -424,14 +428,14 @@ impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
     }
 }
 
-pub struct Compound<'a, W: 'a, O: Options + 'a> {
+pub struct Compound<'a, W: 'a, O: InternalOptions + 'a> {
     ser: &'a mut Serializer<W, O>,
 }
 
 impl<'a, W, O> serde::ser::SerializeSeq for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -453,7 +457,7 @@ where
 impl<'a, W, O> serde::ser::SerializeTuple for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -475,7 +479,7 @@ where
 impl<'a, W, O> serde::ser::SerializeTupleStruct for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -497,7 +501,7 @@ where
 impl<'a, W, O> serde::ser::SerializeTupleVariant for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -519,7 +523,7 @@ where
 impl<'a, W, O> serde::ser::SerializeMap for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -549,7 +553,7 @@ where
 impl<'a, W, O> serde::ser::SerializeStruct for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -571,7 +575,7 @@ where
 impl<'a, W, O> serde::ser::SerializeStructVariant for Compound<'a, W, O>
 where
     W: Write,
-    O: Options,
+    O: InternalOptions,
 {
     type Ok = ();
     type Error = Error;
@@ -590,11 +594,11 @@ where
     }
 }
 
-pub(crate) struct SizeCompound<'a, S: Options + 'a> {
+pub(crate) struct SizeCompound<'a, S: InternalOptions + 'a> {
     ser: &'a mut SizeChecker<S>,
 }
 
-impl<'a, O: Options> serde::ser::SerializeSeq for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeSeq for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -612,7 +616,7 @@ impl<'a, O: Options> serde::ser::SerializeSeq for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options> serde::ser::SerializeTuple for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeTuple for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -630,7 +634,7 @@ impl<'a, O: Options> serde::ser::SerializeTuple for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options> serde::ser::SerializeTupleStruct for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeTupleStruct for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -648,7 +652,7 @@ impl<'a, O: Options> serde::ser::SerializeTupleStruct for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options> serde::ser::SerializeTupleVariant for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeTupleVariant for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -666,7 +670,7 @@ impl<'a, O: Options> serde::ser::SerializeTupleVariant for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options + 'a> serde::ser::SerializeMap for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions + 'a> serde::ser::SerializeMap for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -692,7 +696,7 @@ impl<'a, O: Options + 'a> serde::ser::SerializeMap for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options> serde::ser::SerializeStruct for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeStruct for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
@@ -710,7 +714,7 @@ impl<'a, O: Options> serde::ser::SerializeStruct for SizeCompound<'a, O> {
     }
 }
 
-impl<'a, O: Options> serde::ser::SerializeStructVariant for SizeCompound<'a, O> {
+impl<'a, O: InternalOptions> serde::ser::SerializeStructVariant for SizeCompound<'a, O> {
     type Ok = ();
     type Error = Error;
 
